@@ -27,27 +27,21 @@ defmodule Server do
 
   defp loop_acceptor(socket) do
     {:ok, client} = :gen_tcp.accept(socket)
-
-    Task.start_link(fn -> serve(client) end)
-
+    Task.async(fn -> serve(client) end)
     loop_acceptor(socket)
   end
 
-  defp serve(socket) do
-    socket
-    |> read_line()
-    |> write_line(socket)
+  defp serve(client) do
+    case :gen_tcp.recv(client, 0) do
+      {:ok, data} ->
+        Command.process(client, data)
+        serve(client)
 
-    serve(socket)
-  end
+      {:error, :closed} ->
+        :gen_tcp.close(client)
 
-  defp read_line(socket) do
-    {:ok, data} = :gen_tcp.recv(socket, 0)
-    IO.puts("Command #{data}")
-    data
-  end
-
-  defp write_line(_line, socket) do
-    :gen_tcp.send(socket, "+PONG\r\n")
+      {:error, :timeout} ->
+        Logger.error("Timeout error did not recieve message")
+    end
   end
 end
