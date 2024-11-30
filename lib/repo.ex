@@ -1,8 +1,15 @@
 defmodule Repo do
   use GenServer
 
-  def start_link do
-    GenServer.start_link(__MODULE__, %{})
+  def child_spec(opts) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]}
+    }
+  end
+
+  def start_link(_opts \\ []) do
+    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
   def get(key) do
