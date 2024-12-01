@@ -16,23 +16,24 @@ defmodule Command do
     :gen_tcp.send(client, message)
   end
 
-  defp send_command(client, [command | rest]) when command in ~w(SET set) do
-    Logger.info("SET command received with #{rest}")
+  defp send_command(client, [command | [key, value | other]]) when command in ~w(SET set) do
+    Logger.info("SET command received with #{inspect([key, value | other])}")
 
-    # split the rest of the command into key and value
-
-    [key, value | _] = rest
-
-    # store the key and value in the repo
-    case Repo.set(key, value) do
-      :ok ->
-        message = CommandEncode.encode_simple_string("OK")
-        :gen_tcp.send(client, message)
-
-      _ ->
-        message = CommandEncode.encode_error("Error, could not set key")
+    with {:ok, opts} <- Repo.SetOptions.parse_set_options(other),
+         {:ok, opts} <- Repo.SetOptions.validate(opts),
+         :ok <- Repo.set(key, value, opts) do
+      message = CommandEncode.encode_simple_string("OK")
+      :gen_tcp.send(client, message)
+    else
+      {:error, reason} ->
+        message = CommandEncode.encode_error("ERR #{reason}")
         :gen_tcp.send(client, message)
     end
+  end
+
+  defp send_command(client, [command | _rest]) when command in ~w(SET set) do
+    message = CommandEncode.encode_error("ERR wrong number of arguments for SET command")
+    :gen_tcp.send(client, message)
   end
 
   defp send_command(client, [command | rest]) when command in ~w(GET get) do
